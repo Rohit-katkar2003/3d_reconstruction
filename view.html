@@ -1,0 +1,1163 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>3D Viewer - Measure & Edit</title>
+  <link rel="icon" href="https://marworx.com/assets/favicon-CGjDCdnL.ico" type="image/x-icon">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      overflow: hidden;
+      background: #1a1a1a;
+    }
+
+    /* Left Control Panel */
+    .control-panel {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 320px;
+      height: 100vh;
+      background: rgba(20, 20, 30, 0.95);
+      color: #fff;
+      overflow-y: auto;
+      z-index: 100;
+      box-shadow: 2px 0 10px rgba(0, 0, 0, 0.5);
+      transition: transform 0.3s ease;
+    }
+
+    .control-panel.collapsed {
+      transform: translateX(-320px);
+    }
+
+    .panel-toggle {
+      position: absolute;
+      left: 320px;
+      top: 20px;
+      width: 40px;
+      height: 40px;
+      background: rgba(20, 20, 30, 0.95);
+      border: none;
+      color: #fff;
+      cursor: pointer;
+      border-radius: 0 8px 8px 0;
+      font-size: 20px;
+      z-index: 101;
+      transition: left 0.3s ease;
+    }
+
+    .control-panel.collapsed+.panel-toggle {
+      left: 0;
+    }
+
+    .panel-section {
+      padding: 20px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .panel-section h3 {
+      font-size: 14px;
+      color: #4CAF50;
+      margin-bottom: 15px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .file-input-wrapper {
+      position: relative;
+      margin: 8px 0;
+    }
+
+    .file-input-wrapper input[type="file"] {
+      position: absolute;
+      opacity: 0;
+      width: 100%;
+      height: 100%;
+      cursor: pointer;
+    }
+
+    .file-input-label {
+      display: block;
+      padding: 10px 15px;
+      background: #2d2d3d;
+      border-radius: 6px;
+      text-align: center;
+      cursor: pointer;
+      transition: background 0.3s;
+      font-size: 13px;
+    }
+
+    .file-input-label:hover {
+      background: #3d3d4d;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 12px;
+      margin: 5px 0;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      transition: all 0.3s;
+      color: white;
+    }
+
+    .btn-primary {
+      background: #4CAF50;
+    }
+
+    .btn-primary:hover {
+      background: #45a049;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(76, 175, 80, 0.3);
+    }
+
+    .btn-secondary {
+      background: #2196F3;
+    }
+
+    .btn-secondary:hover {
+      background: #1976D2;
+    }
+
+    .btn-warning {
+      background: #FF9800;
+    }
+
+    .btn-warning:hover {
+      background: #F57C00;
+    }
+
+    .btn-danger {
+      background: #f44336;
+    }
+
+    .btn-danger:hover {
+      background: #da190b;
+    }
+
+    .btn.active {
+      background: #bc80e4fd;
+      color: #000;
+      box-shadow: 0 0 15px rgba(255, 215, 0, 0.5);
+    }
+
+    select {
+      width: 100%;
+      padding: 10px;
+      margin: 5px 0;
+      background: #2d2d3d;
+      color: white;
+      border: 1px solid #3d3d4d;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+
+    .object-list {
+      max-height: 200px;
+      overflow-y: auto;
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 6px;
+      padding: 8px;
+    }
+
+    .object-item {
+      padding: 8px 12px;
+      margin: 4px 0;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 4px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      transition: background 0.2s;
+    }
+
+    .object-item:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .object-item.selected {
+      background: rgba(76, 175, 80, 0.4);
+      border: 1px solid #4CAF50;
+    }
+
+    .object-item button {
+      padding: 4px 10px;
+      font-size: 11px;
+      background: #4CAF50;
+      border: none;
+      color: white;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    /* Mode Indicator */
+    .mode-indicator {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      padding: 15px 25px;
+      background: rgba(76, 175, 80, 0.95);
+      color: white;
+      border-radius: 8px;
+      font-size: 18px;
+      font-weight: bold;
+      z-index: 100;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    }
+
+    /* Measurements Panel */
+    .measurements-panel {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      max-width: 400px;
+      max-height: 60vh;
+      overflow-y: auto;
+      background: rgba(20, 20, 30, 0.95);
+      color: white;
+      border-radius: 8px;
+      padding: 15px;
+      z-index: 100;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    }
+
+    .measurements-panel:empty {
+      display: none;
+    }
+
+    .measurement-item {
+      margin-bottom: 12px;
+      padding: 12px;
+      background: rgba(0, 0, 0, 0.4);
+      border-left: 3px solid #4CAF50;
+      border-radius: 4px;
+    }
+
+    .measurement-item h4 {
+      color: #FFD700;
+      font-size: 13px;
+      margin-bottom: 8px;
+    }
+
+    .measurement-value {
+      color: #00ffff;
+      font-size: 16px;
+      font-weight: bold;
+      margin: 4px 0;
+    }
+
+    .measurement-coords {
+      font-size: 10px;
+      color: #888;
+      margin-top: 8px;
+    }
+
+    /* Info Panel */
+    .info-panel {
+      position: absolute;
+      bottom: 62vh;
+      right: 20px;
+      background: rgba(20, 20, 30, 0.9);
+      color: white;
+      padding: 15px;
+      border-radius: 8px;
+      font-family: monospace;
+      font-size: 11px;
+      z-index: 100;
+      max-width: 300px;
+    }
+
+    .info-panel h4 {
+      color: #4CAF50;
+      margin-bottom: 8px;
+      font-size: 12px;
+    }
+
+    .info-panel kbd {
+      background: #333;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 10px;
+    }
+
+    /* Scrollbar Styling */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.3);
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #4CAF50;
+      border-radius: 4px;
+    }
+
+    .btn-group {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 5px;
+    }
+
+    .empty-state {
+      padding: 20px;
+      text-align: center;
+      opacity: 0.5;
+      font-size: 12px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- Control Panel -->
+  <div class="control-panel" id="controlPanel">
+
+    <div class="panel-section">
+      <h3>🏠 Load Main Model</h3>
+      <div class="file-input-wrapper">
+        <label class="file-input-label">
+          📁 Choose GLB/GLTF/OBJ File
+          <input type="file" id="roomInput" accept=".glb,.gltf,.obj">
+        </label>
+      </div>
+      <div class="file-input-wrapper">
+        <label class="file-input-label">
+          🌅 Choose HDR Environment
+          <input type="file" id="hdrInput" accept=".hdr">
+        </label>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <h3>🎮 Navigation Mode</h3>
+      <button class="btn btn-primary" id="walkBtn">🚶 Walk Mode</button>
+      <button class="btn btn-secondary" id="flyBtn">🚁 Fly Mode</button>
+      <button class="btn btn-warning" id="editBtn">✏️ Edit Mode</button>
+      <button class="btn btn-primary" id="measureBtn">📏 Measure Mode</button>
+    </div>
+
+    <div class="panel-section">
+      <h3>➕ Add Objects</h3>
+      <div class="file-input-wrapper">
+        <label class="file-input-label">
+          🪑 Import Furniture
+          <input type="file" id="furnitureInput" accept=".glb,.gltf,.obj">
+        </label>
+      </div>
+      <select id="primitiveSelect">
+        <option value="chair">Simple Chair</option>
+        <option value="table">Simple Table</option>
+        <option value="box">Box</option>
+        <option value="sphere">Sphere</option>
+        <option value="cylinder">Cylinder</option>
+      </select>
+      <button class="btn btn-primary" id="addPrimitiveBtn">Add Primitive</button>
+    </div>
+
+    <div class="panel-section">
+      <h3>🔧 Edit Tools</h3>
+      <div class="btn-group">
+        <button class="btn btn-secondary" id="cloneBtn">📋 Clone</button>
+        <button class="btn btn-danger" id="deleteBtn">🗑️ Delete</button>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <h3>📦 Scene Objects</h3>
+      <div class="object-list" id="objectList">
+        <div class="empty-state">No objects in scene</div>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <h3>⚙️ Settings</h3>
+      <button class="btn btn-secondary" id="clearMeasurementsBtn">Clear Measurements</button>
+      <button class="btn btn-danger" id="resetSceneBtn">Reset Scene</button>
+    </div>
+
+  </div>
+
+  <button class="panel-toggle" id="panelToggle">☰</button>
+
+  <!-- Mode Indicator -->
+  <div class="mode-indicator" id="modeIndicator">🚶 WALK MODE</div>
+
+  <!-- Measurements Display -->
+  <div class="measurements-panel" id="measurementsPanel"></div>
+
+  <!-- Info Panel -->
+  <div class="info-panel">
+    <h4>CONTROLS</h4>
+    <div id="controlsInfo">
+      <b>WALK/FLY:</b><br>
+      Click canvas to lock pointer<br>
+      <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> Move<br>
+      <kbd>Shift</kbd> Run<br>
+      <kbd>Space</kbd>/<kbd>Ctrl</kbd> Up/Down<br>
+      <br>
+      <b>EDIT:</b><br>
+      Click object to select<br>
+      <kbd>←</kbd><kbd>→</kbd> Move X<br>
+      <kbd>↑</kbd><kbd>↓</kbd> Move Z<br>
+      <kbd>I</kbd>/<kbd>K</kbd> Move Y<br>
+      <kbd>Q</kbd>/<kbd>E</kbd> Rotate<br>
+      <kbd>[</kbd>/<kbd>]</kbd> Scale<br>
+      <br>
+      <b>MEASURE:</b><br>
+      Click 2 points on surfaces
+    </div>
+  </div>
+
+  <script type="module">
+    import * as THREE from "https://esm.sh/three@0.158.0";
+    import { GLTFLoader } from "https://esm.sh/three@0.158.0/examples/jsm/loaders/GLTFLoader.js";
+    import { OBJLoader } from "https://esm.sh/three@0.158.0/examples/jsm/loaders/OBJLoader.js";
+    import { PointerLockControls } from "https://esm.sh/three@0.158.0/examples/jsm/controls/PointerLockControls.js";
+    import { RGBELoader } from "https://esm.sh/three@0.158.0/examples/jsm/loaders/RGBELoader.js";
+
+    /* =============== SCENE SETUP =================== */
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x1a1a1a);
+
+    const ambient = new THREE.AmbientLight(0xffffff, 0.5);
+    scene.add(ambient);
+
+    const sun = new THREE.DirectionalLight(0xffffff, 1.0);
+    sun.position.set(300, 400, 200);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.camera.left = -500;
+    sun.shadow.camera.right = 500;
+    sun.shadow.camera.top = 500;
+    sun.shadow.camera.bottom = -500;
+    scene.add(sun);
+
+    /* =============== CAMERA =================== */
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 50);
+    camera.position.set(0, 1.6, 5);
+
+    /* =============== RENDERER =================== */
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 0.8;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    document.body.appendChild(renderer.domElement);
+
+    /* =============== CONTROLS =================== */
+    const controls = new PointerLockControls(camera, renderer.domElement);
+    const move = { forward: false, back: false, left: false, right: false, up: false, down: false };
+    let speed = 1;
+    let flyMode = false;
+
+    /* =============== STATE MANAGEMENT =================== */
+    let mode = "walk"; // walk, fly, edit, measure
+    let selectedObject = null;
+    let placedObjects = [];
+    let objectCounter = 0;
+    let measurementCounter = 0;
+    let measurePoints = [];
+    let measurementObjects = [];
+
+    // Model boundaries
+    let floorLevel = 0;
+    let boundarySize = 100;
+    let skyLimit = 50;
+
+    /* =============== RAYCASTING =================== */
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    /* =============== LOADERS =================== */
+    const gltfLoader = new GLTFLoader();
+    const objLoader = new OBJLoader();
+    const rgbeLoader = new RGBELoader();
+
+    /* =============== MODE MANAGEMENT =================== */
+    function setMode(newMode) {
+      mode = newMode;
+
+      // Update UI
+      document.querySelectorAll('.btn').forEach(btn => btn.classList.remove('active'));
+      const modeIndicator = document.getElementById('modeIndicator');
+
+      if (mode === "walk") {
+        document.getElementById('walkBtn').classList.add('active');
+        modeIndicator.textContent = "🚶 WALK MODE";
+        modeIndicator.style.background = "rgba(76, 175, 80, 0.95)";
+        controls.unlock();
+        clearMeasureMode();
+        deselectObject();
+      } else if (mode === "fly") {
+        document.getElementById('flyBtn').classList.add('active');
+        modeIndicator.textContent = "🚁 FLY MODE";
+        modeIndicator.style.background = "rgba(33, 150, 243, 0.95)";
+        controls.unlock();
+        flyMode = true;
+        clearMeasureMode();
+        deselectObject();
+      } else if (mode === "edit") {
+        document.getElementById('editBtn').classList.add('active');
+        modeIndicator.textContent = "✏️ EDIT MODE";
+        modeIndicator.style.background = "rgba(255, 152, 0, 0.95)";
+        controls.unlock();
+        flyMode = false;
+        clearMeasureMode();
+      } else if (mode === "measure") {
+        document.getElementById('measureBtn').classList.add('active');
+        modeIndicator.textContent = "📏 MEASURE MODE";
+        modeIndicator.style.background = "rgba(156, 39, 176, 0.95)";
+        controls.unlock();
+        flyMode = false;
+        deselectObject();
+        measurePoints = [];
+      }
+
+      console.log(`Mode: ${mode}`);
+    }
+
+    function clearMeasureMode() {
+      measurePoints = [];
+    }
+
+    function deselectObject() {
+      if (selectedObject) {
+        selectedObject.traverse(o => {
+          if (o.isMesh && o.material.emissive) {
+            o.material.emissive.setHex(0x000000);
+          }
+        });
+        selectedObject = null;
+        updateObjectList();
+      }
+    }
+
+    /* =============== MODEL FITTING =================== */
+    function fitModel(model, isMainRoom = true) {
+      const box = new THREE.Box3().setFromObject(model);
+      const size = box.getSize(new THREE.Vector3());
+      const center = box.getCenter(new THREE.Vector3());
+
+      // PRESERVE REAL-WORLD SCALE - Only center the model
+      model.position.sub(center);
+
+      if (isMainRoom) {
+        // Move model so its bottom sits at y=0
+        const minY = box.min.y - center.y;
+        model.position.y = -minY;
+
+        // Recalculate box after positioning
+        box.setFromObject(model);
+
+        // Update floor level to the actual bottom of the model
+        floorLevel = box.min.y;
+
+        // Position camera at eye level on the floor
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const cameraDistance = maxDim * 1.5;
+        camera.position.set(cameraDistance * 0.5, floorLevel + 1.6, cameraDistance);
+        camera.lookAt(0, floorLevel + 1.6, 0);
+
+        // Update boundaries
+        boundarySize = Math.max(size.x, size.z) * 2;
+        skyLimit = box.max.y + size.y;
+
+        console.log(`Model loaded - Real-world scale preserved`);
+        console.log(`Size: ${size.x.toFixed(2)}m × ${size.y.toFixed(2)}m × ${size.z.toFixed(2)}m`);
+        console.log(`Floor level: ${floorLevel.toFixed(2)}m`);
+        console.log(`Camera eye level: ${(floorLevel + 1.6).toFixed(2)}m`);
+      }
+
+      model.traverse(o => {
+        if (o.isMesh) {
+          o.castShadow = true;
+          o.receiveShadow = true;
+        }
+      });
+    }
+
+    /* =============== OBJECT MANAGEMENT =================== */
+    function addObject(obj, name, autoFit = false) {
+      obj.userData.name = name || `Object ${++objectCounter}`;
+      obj.userData.id = objectCounter;
+
+      // Position in front of camera if not auto-fitted
+      if (!autoFit) {
+        const forward = new THREE.Vector3(0, 0, -1);
+        forward.applyQuaternion(camera.quaternion);
+        obj.position.copy(camera.position).add(forward.multiplyScalar(5));
+        obj.position.y = floorLevel + 1;
+      }
+
+      scene.add(obj);
+      placedObjects.push(obj);
+      updateObjectList();
+      setMode("edit");
+      selectObject(obj);
+
+      console.log(`Added: ${obj.userData.name}`);
+    }
+
+    function selectObject(obj) {
+      deselectObject();
+
+      selectedObject = obj;
+      selectedObject.traverse(o => {
+        if (o.isMesh) {
+          if (!o.material.emissive) {
+            o.material.emissive = new THREE.Color(0x444444);
+          } else {
+            o.material.emissive.setHex(0x444444);
+          }
+        }
+      });
+
+      updateObjectList();
+      console.log(`Selected: ${obj.userData.name}`);
+    }
+
+    function deleteSelected() {
+      if (!selectedObject) {
+        alert("No object selected!");
+        return;
+      }
+
+      const name = selectedObject.userData.name;
+      scene.remove(selectedObject);
+      placedObjects = placedObjects.filter(o => o !== selectedObject);
+      selectedObject = null;
+      updateObjectList();
+      console.log(`Deleted: ${name}`);
+    }
+
+    function cloneSelected() {
+      if (!selectedObject) {
+        alert("No object selected!");
+        return;
+      }
+
+      const clone = selectedObject.clone();
+      clone.position.x += 2;
+      clone.userData.name = selectedObject.userData.name + " (copy)";
+      clone.userData.id = ++objectCounter;
+
+      scene.add(clone);
+      placedObjects.push(clone);
+      updateObjectList();
+      selectObject(clone);
+      console.log(`Cloned: ${clone.userData.name}`);
+    }
+
+    function updateObjectList() {
+      const list = document.getElementById('objectList');
+      list.innerHTML = "";
+
+      if (placedObjects.length === 0) {
+        list.innerHTML = '<div class="empty-state">No objects in scene</div>';
+        return;
+      }
+
+      placedObjects.forEach(obj => {
+        const item = document.createElement('div');
+        item.className = 'object-item';
+        if (obj === selectedObject) {
+          item.classList.add('selected');
+        }
+
+        const name = document.createElement('span');
+        name.textContent = obj.userData.name;
+
+        const selectBtn = document.createElement('button');
+        selectBtn.textContent = "Select";
+        selectBtn.onclick = () => {
+          setMode("edit");
+          selectObject(obj);
+        };
+
+        item.appendChild(name);
+        item.appendChild(selectBtn);
+        list.appendChild(item);
+      });
+    }
+
+    /* =============== PRIMITIVE OBJECTS =================== */
+    function createPrimitive(type) {
+      let obj;
+      const material = new THREE.MeshStandardMaterial({
+        color: 0x8B4513,
+        roughness: 0.8,
+        metalness: 0.2
+      });
+
+      switch (type) {
+        case "box":
+          obj = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), material);
+          break;
+        case "sphere":
+          obj = new THREE.Mesh(new THREE.SphereGeometry(0.5, 32, 32), material);
+          break;
+        case "cylinder":
+          obj = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 1, 32), material);
+          break;
+        case "chair":
+          obj = createSimpleChair();
+          break;
+        case "table":
+          obj = createSimpleTable();
+          break;
+      }
+
+      obj.traverse(o => {
+        if (o.isMesh) {
+          o.castShadow = true;
+          o.receiveShadow = true;
+        }
+      });
+
+      return obj;
+    }
+
+    function createSimpleChair() {
+      const group = new THREE.Group();
+      const wood = new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 0.8 });
+
+      const seat = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.05, 0.5), wood);
+      seat.position.y = 0.5;
+      group.add(seat);
+
+      const back = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.05), wood);
+      back.position.set(0, 0.75, -0.225);
+      group.add(back);
+
+      for (let x of [-0.2, 0.2]) {
+        for (let z of [-0.2, 0.2]) {
+          const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.5), wood);
+          leg.position.set(x, 0.25, z);
+          group.add(leg);
+        }
+      }
+
+      return group;
+    }
+
+    function createSimpleTable() {
+      const group = new THREE.Group();
+      const wood = new THREE.MeshStandardMaterial({ color: 0xA0522D, roughness: 0.7 });
+
+      const top = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.05, 1), wood);
+      top.position.y = 0.75;
+      group.add(top);
+
+      for (let x of [-0.65, 0.65]) {
+        for (let z of [-0.45, 0.45]) {
+          const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.75), wood);
+          leg.position.set(x, 0.375, z);
+          group.add(leg);
+        }
+      }
+
+      return group;
+    }
+
+    /* =============== MEASUREMENT SYSTEM =================== */
+    function createMeasurementPoint(position) {
+      const camDist = camera.position.distanceTo(position);
+      const pointSize = Math.max(0.01, camDist * 0.01);
+      const pointGeo = new THREE.SphereGeometry(pointSize, 16, 16);
+      const pointMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+      const point = new THREE.Mesh(pointGeo, pointMat);
+      point.position.copy(position);
+      scene.add(point);
+      measurementObjects.push(point);
+      return point;
+    }
+
+    function createMeasurementLine(p1, p2, distance) {
+      const points = [p1, p2];
+      const lineGeo = new THREE.BufferGeometry().setFromPoints(points);
+      const lineMat = new THREE.LineBasicMaterial({ color: 0x00ff00, linewidth: 2 });
+      const line = new THREE.Line(lineGeo, lineMat);
+      scene.add(line);
+      measurementObjects.push(line);
+
+      measurementCounter++;
+      updateMeasurementDisplay(measurementCounter, distance, p1, p2);
+
+      return line;
+    }
+
+    function updateMeasurementDisplay(id, distance, p1, p2) {
+      const panel = document.getElementById('measurementsPanel');
+      const meters = distance.toFixed(3);
+      const feet = (distance * 3.28084).toFixed(2);
+      const inches = (distance * 39.3701).toFixed(1);
+      const cm = (distance * 100).toFixed(1);
+
+      const item = document.createElement('div');
+      item.className = 'measurement-item';
+      item.innerHTML = `
+        <h4>Measurement #${id}</h4>
+        <div class="measurement-value">${meters} m</div>
+        <div style="color:#ff0;">${cm} cm</div>
+        <div style="color:#f80;">${feet} ft | ${inches} in</div>
+        <div class="measurement-coords">
+          From: (${p1.x.toFixed(2)}, ${p1.y.toFixed(2)}, ${p1.z.toFixed(2)})<br>
+          To: (${p2.x.toFixed(2)}, ${p2.y.toFixed(2)}, ${p2.z.toFixed(2)})
+        </div>
+      `;
+
+      panel.appendChild(item);
+    }
+
+    function clearAllMeasurements() {
+      measurementObjects.forEach(obj => scene.remove(obj));
+      measurementObjects = [];
+      measurementCounter = 0;
+      document.getElementById('measurementsPanel').innerHTML = "";
+      console.log("All measurements cleared");
+    }
+
+    /* =============== INPUT HANDLING =================== */
+    window.addEventListener("keydown", e => {
+      // Edit mode controls
+      if (mode === "edit" && selectedObject) {
+        const moveSpeed = 0.1;
+        const rotSpeed = 0.05;
+        const scaleSpeed = 0.05;
+
+        if (e.code === "ArrowUp") { selectedObject.position.z -= moveSpeed; e.preventDefault(); }
+        if (e.code === "ArrowDown") { selectedObject.position.z += moveSpeed; e.preventDefault(); }
+        if (e.code === "ArrowLeft") { selectedObject.position.x -= moveSpeed; e.preventDefault(); }
+        if (e.code === "ArrowRight") { selectedObject.position.x += moveSpeed; e.preventDefault(); }
+        if (e.code === "KeyI") { selectedObject.position.y += moveSpeed; e.preventDefault(); }
+        if (e.code === "KeyK") { selectedObject.position.y -= moveSpeed; e.preventDefault(); }
+        if (e.code === "KeyQ") { selectedObject.rotation.y += rotSpeed; e.preventDefault(); }
+        if (e.code === "KeyE") { selectedObject.rotation.y -= rotSpeed; e.preventDefault(); }
+        if (e.code === "BracketRight") { selectedObject.scale.multiplyScalar(1 + scaleSpeed); e.preventDefault(); }
+        if (e.code === "BracketLeft") { selectedObject.scale.multiplyScalar(1 - scaleSpeed); e.preventDefault(); }
+        return;
+      }
+
+      // Walk/Fly mode controls
+      if (mode === "walk" || mode === "fly") {
+        if (e.code === "KeyW") move.back = true;
+        if (e.code === "KeyS") move.forward = true;
+        if (e.code === "KeyA") move.left = true;
+        if (e.code === "KeyD") move.right = true;
+        if (e.code === "Space") move.up = true;
+        if (e.code === "ControlLeft") move.down = true;
+        if (e.code === "ShiftLeft") speed = 3;
+      }
+    });
+
+    window.addEventListener("keyup", e => {
+      if (e.code === "KeyW") move.back = false;
+      if (e.code === "KeyS") move.forward = false;
+      if (e.code === "KeyA") move.left = false;
+      if (e.code === "KeyD") move.right = false;
+      if (e.code === "Space") move.up = false;
+      if (e.code === "ControlLeft") move.down = false;
+      if (e.code === "ShiftLeft") speed = 1;
+    });
+
+    /* =============== CLICK HANDLING =================== */
+    renderer.domElement.addEventListener("click", (event) => {
+      // Ignore clicks on UI
+      if (event.target !== renderer.domElement) return;
+
+      if (mode === "measure") {
+        mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+        raycaster.setFromCamera(mouse, camera);
+        const intersects = raycaster.intersectObjects(scene.children, true);
+
+        if (intersects.length > 0) {
+          const point = intersects[0].point;
+          measurePoints.push(point);
+          createMeasurementPoint(point);
+
+          if (measurePoints.length === 2) {
+            const distance = measurePoints[0].distanceTo(measurePoints[1]);
+            createMeasurementLine(measurePoints[0], measurePoints[1], distance);
+            measurePoints = [];
+            console.log(`Measured: ${distance.toFixed(3)}m`);
+          }
+        }
+      } else if (mode === "edit") {
+        mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+        raycaster.setFromCamera(mouse, camera);
+        const intersects = raycaster.intersectObjects(placedObjects, true);
+
+        if (intersects.length > 0) {
+          let obj = intersects[0].object;
+          while (obj.parent && !placedObjects.includes(obj)) {
+            obj = obj.parent;
+          }
+          selectObject(obj);
+        } else {
+          deselectObject();
+        }
+      } else {
+        // Walk/Fly mode - lock pointer
+        controls.lock();
+      }
+    });
+
+    /* =============== FILE LOADING =================== */
+    document.getElementById('roomInput').addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(ev) {
+      const arrayBuffer = ev.target.result;
+
+      // Manually extract embedded textures from GLB binary before Three.js touches it
+      function extractGLBTextures(buffer) {
+        const textures = [];
+        try {
+          const view = new DataView(buffer);
+          // GLB header: magic(4) version(4) length(4) = 12 bytes
+          // JSON chunk: length(4) type(4) data
+          const jsonChunkLen = view.getUint32(12, true);
+          const jsonStart = 20;
+          const jsonText = new TextDecoder().decode(buffer.slice(jsonStart, jsonStart + jsonChunkLen));
+          const json = JSON.parse(jsonText);
+
+          // BIN chunk starts after JSON chunk
+          const binStart = jsonStart + jsonChunkLen;
+          const binChunkLen = view.getUint32(binStart, true);
+          const binData = buffer.slice(binStart + 8, binStart + 8 + binChunkLen);
+
+          if (json.images && json.bufferViews) {
+            json.images.forEach((img, idx) => {
+              if (img.bufferView !== undefined) {
+                const bv = json.bufferViews[img.bufferView];
+                const imgData = binData.slice(bv.byteOffset, bv.byteOffset + bv.byteLength);
+                const mime = img.mimeType || 'image/png';
+                const blob = new Blob([imgData], { type: mime });
+                const url = URL.createObjectURL(blob);
+                textures.push({ index: idx, url, mime });
+              }
+            });
+          }
+        } catch(err) {
+          console.warn('GLB texture extraction failed:', err);
+        }
+        return textures;
+      }
+
+      if (file.name.endsWith('.glb') || file.name.endsWith('.gltf')) {
+        // Step 1: extract textures manually
+        const extractedTextures = extractGLBTextures(arrayBuffer);
+        console.log(`Manually extracted ${extractedTextures.length} textures from GLB`);
+
+        // Step 2: parse the GLB
+        gltfLoader.parse(arrayBuffer, '', gltf => {
+          const model = gltf.scene;
+          model.userData.name = "Main Room";
+          model.userData.isRoom = true;
+
+          // Step 3: if Three.js failed to load textures, inject ours manually
+          if (extractedTextures.length > 0) {
+            const texLoader = new THREE.TextureLoader();
+
+            // Load all extracted textures first
+            const loadedTexMap = {};
+            let loadCount = 0;
+
+            extractedTextures.forEach(t => {
+              texLoader.load(t.url, tex => {
+                tex.colorSpace = THREE.SRGBColorSpace;
+                tex.flipY = false; // GLB textures are not flipped
+                tex.needsUpdate = true;
+                loadedTexMap[t.index] = tex;
+                loadCount++;
+
+                // Once all textures loaded, apply them
+                if (loadCount === extractedTextures.length) {
+                  applyTextures(model, loadedTexMap);
+                  extractedTextures.forEach(t => URL.revokeObjectURL(t.url));
+                }
+              });
+            });
+          } else {
+            // No textures extracted, just add model
+            scene.add(model);
+            fitModel(model, true);
+          }
+
+          function applyTextures(model, texMap) {
+            // Use first available texture (baked atlas = single texture)
+            const tex = texMap[0] || Object.values(texMap)[0];
+
+            model.traverse(o => {
+              if (o.isMesh) {
+                o.material = new THREE.MeshBasicMaterial({
+                  map: tex,
+                  side: THREE.DoubleSide,
+                });
+                o.castShadow = true;
+                o.receiveShadow = true;
+              }
+            });
+
+            scene.add(model);
+            fitModel(model, true);
+            console.log('Textures applied successfully!');
+          }
+
+        }, err => console.error('GLB parse error:', err));
+
+      } else if (file.name.endsWith('.obj')) {
+        const text = new TextDecoder().decode(arrayBuffer);
+        const obj = objLoader.parse(text);
+        obj.userData.name = "Main Room";
+        obj.userData.isRoom = true;
+        scene.add(obj);
+        fitModel(obj, true);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  });
+
+    document.getElementById('hdrInput').addEventListener('change', e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const url = URL.createObjectURL(file);
+      rgbeLoader.load(url, texture => {
+        texture.mapping = THREE.EquirectangularReflectionMapping;
+        scene.environment = texture;
+        scene.background = texture;
+        console.log("HDR Loaded:", file.name);
+      });
+    });
+
+    document.getElementById('furnitureInput').addEventListener('change', e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const url = URL.createObjectURL(file);
+
+      if (file.name.endsWith('.glb') || file.name.endsWith('.gltf')) {
+        gltfLoader.load(url, gltf => {
+          const model = gltf.scene;
+          addObject(model, file.name.replace(/\.(glb|gltf)$/, ''));
+        });
+      } else if (file.name.endsWith('.obj')) {
+        objLoader.load(url, obj => {
+          addObject(obj, file.name.replace(/\.obj$/, ''));
+        });
+      }
+    });
+
+    /* =============== UI EVENTS =================== */
+    document.getElementById('walkBtn').addEventListener('click', () => setMode('walk'));
+    document.getElementById('flyBtn').addEventListener('click', () => setMode('fly'));
+    document.getElementById('editBtn').addEventListener('click', () => setMode('edit'));
+    document.getElementById('measureBtn').addEventListener('click', () => setMode('measure'));
+
+    document.getElementById('addPrimitiveBtn').addEventListener('click', () => {
+      const type = document.getElementById('primitiveSelect').value;
+      const obj = createPrimitive(type);
+      const name = type.charAt(0).toUpperCase() + type.slice(1);
+      addObject(obj, name);
+    });
+
+    document.getElementById('cloneBtn').addEventListener('click', cloneSelected);
+    document.getElementById('deleteBtn').addEventListener('click', deleteSelected);
+    document.getElementById('clearMeasurementsBtn').addEventListener('click', clearAllMeasurements);
+
+    document.getElementById('resetSceneBtn').addEventListener('click', () => {
+      if (confirm('Reset entire scene? This will remove all objects and measurements.')) {
+        placedObjects.forEach(obj => scene.remove(obj));
+        placedObjects = [];
+        clearAllMeasurements();
+        selectedObject = null;
+        objectCounter = 0;
+        updateObjectList();
+        console.log("Scene reset");
+      }
+    });
+
+    document.getElementById('panelToggle').addEventListener('click', () => {
+      document.getElementById('controlPanel').classList.toggle('collapsed');
+    });
+
+    /* =============== MOVEMENT & BOUNDARIES =================== */
+    function clampToBounds(obj) {
+      obj.position.x = Math.max(-boundarySize, Math.min(boundarySize, obj.position.x));
+      obj.position.z = Math.max(-boundarySize, Math.min(boundarySize, obj.position.z));
+
+      if (flyMode) {
+        obj.position.y = Math.max(0, Math.min(skyLimit, obj.position.y));
+      } else {
+        obj.position.y = Math.max(floorLevel + 1.6, Math.min(skyLimit, obj.position.y));
+      }
+    }
+
+    /* =============== ANIMATION LOOP =================== */
+    function animate() {
+      requestAnimationFrame(animate);
+
+      if (controls.isLocked && (mode === "walk" || mode === "fly")) {
+        const d = new THREE.Vector3();
+        if (move.forward) d.z -= speed * 0.1;
+        if (move.back) d.z += speed * 0.1;
+        if (move.left) d.x -= speed * 0.1;
+        if (move.right) d.x += speed * 0.1;
+
+        controls.moveRight(d.x);
+        controls.moveForward(d.z);
+
+        if (mode === "fly" && flyMode) {
+          if (move.up) controls.getObject().position.y += speed * 0.1;
+          if (move.down) controls.getObject().position.y -= speed * 0.1;
+        } else {
+          // ✅ Maintain eye height properly
+          controls.getObject().position.y = THREE.MathUtils.lerp(
+            controls.getObject().position.y,
+            floorLevel + 1.6,
+            0.2
+          );
+        }
+
+        clampToBounds(controls.getObject());
+      }
+
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    /* =============== WINDOW RESIZE =================== */
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // Initialize
+    setMode('walk');
+    console.log("Professional 3D Viewer loaded");
+  </script>
+</body>
+
+</html>
