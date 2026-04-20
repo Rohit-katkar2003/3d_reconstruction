@@ -883,13 +883,10 @@ class ParameterDeriver:
         vox_raw = max(vox_lidar, vox_nyquist, vox_noise)
         vox_raw = max(vox_raw, vox_step * 0.5)
 
-        # FIX: raised room/corridor minimum from 0.008→0.018 to prevent
-        # crystal-spike artifacts when vox_lidar computes a too-small value
-        # (seen in cabin3 at 0.017m → sharp triangulated spikes everywhere).
         clamps = {
-            "object":   (0.004, 0.020),
-            "room":     (0.018, 0.065),
-            "corridor": (0.018, 0.065),
+            "object":   (0.003, 0.015),
+            "room":     (0.008, 0.060),
+            "corridor": (0.008, 0.060),
             "outdoor":  (0.020, 0.150),
         }
         vox = float(np.clip(vox_raw, *clamps[scale]))
@@ -901,27 +898,25 @@ class ParameterDeriver:
         )
 
         # ── SDF truncation ────────────────────────────────────────────────────
-        # FIX: raised base sdf_trunc multipliers — too low caused disjoint
-        # surface fragments and confetti (noise not absorbed into TSDF surface).
-        # indoor: 4.5→6.5, object: 6.0→7.0
-        sdf_base  = {"object": 7.0, "room": 6.5, "corridor": 6.5, "outdoor": 4.0}[scale]
+        # Base multiplier by scale; increase if surface is noisy
+        sdf_base  = {"object": 6.0, "room": 4.5, "corridor": 4.5, "outdoor": 3.5}[scale]
         noise_pen = float(np.clip(dep.plane_residual_m / (vox + 1e-9) * 0.25, 0.0, 2.0))
-        # FIX: raised sdf_trunc upper cap from 12→16 (room scans with high
-        # residual can need more truncation latitude).
-        sdf_trunc_mult = float(np.clip(sdf_base + noise_pen, 3.0, 16.0))
+        sdf_trunc_mult = float(np.clip(sdf_base + noise_pen, 3.0, 12.0))
 
         # ── Depth range ───────────────────────────────────────────────────────
         sensor_min = {"object": 0.05, "room": 0.08, "corridor": 0.08, "outdoor": 0.15}[scale]
         min_d = float(np.clip(dep.p01 * 0.90, sensor_min, dep.p25))
         max_d = float(np.clip(dep.p99 * 1.15, min_d + dep.p50 * 0.5, 40.0))
 
-        # FIX: tightened flying_pixel threshold.
-        # grad_p95 * 0.5 was too permissive — let edge-bleed flying pixels
-        # through on close-range indoor scans, creating spike/torn geometry.
-        # Now use grad_p95 * 0.35 with a tighter fly_max cap.
-        fly_min = vox * 4.0
-        fly_max = max(dep.depth_range * 0.10, fly_min * 3.0)
-        flying  = float(np.clip(dep.gradient_p95 * 0.35, fly_min, fly_max))
+        # ── Flying-pixel threshold ────────────────────────────────────────────
+        # A real surface edge jumps ~p50*0.3 to p50*1.0 in depth.
+        # Flying pixels from LiDAR edge bleed jump ~vox*3 to vox*8.
+        # Threshold should sit between these ranges.
+        # Use grad_p95 as the natural break-point: it captures real edges.
+        # DO NOT cap with min(..., 0.02) in pipeline.py
+        fly_min = vox * 5.0
+        fly_max = max(dep.depth_range * 0.15, fly_min * 4.0)
+        flying  = float(np.clip(dep.gradient_p95 * 0.5, fly_min, fly_max))
 
         log.info(f"  flying_px: grad_p95={dep.gradient_p95:.4f}  "
                  f"fly_min={fly_min:.4f}  fly_max={fly_max:.4f}  → {flying:.4f}m")
@@ -945,15 +940,13 @@ class ParameterDeriver:
                          "outdoor":  (200_000, 8_000_000)}
         mfaces = int(np.clip(mfaces_raw, *mfaces_bounds[scale]))
 
-        # FIX: raised mq base values — previous values were too low and kept
-        # sparse confetti fragments visible in the final mesh.
+        # ── Density quantile ──────────────────────────────────────────────────
         fd      = float(np.clip(geo.n_frames / 200.0, 0.25, 3.0))
-        mq_base = {"object": 0.012, "room": 0.035, "corridor": 0.030, "outdoor": 0.018}[scale]
-        mq      = float(np.clip(mq_base * fd, 0.008, 0.12))
+        mq_base = {"object": 0.004, "room": 0.018, "corridor": 0.016, "outdoor": 0.012}[scale]
+        mq      = float(np.clip(mq_base * fd, 0.002, 0.09))
 
-        # FIX: raised mcomp — previous values too small, confetti island
-        # components (disconnected surface patches) survived post-meshing.
-        mcomp   = {"object": 0.020, "room": 0.012, "corridor": 0.008, "outdoor": 0.005}[scale]
+        # ── Component filter ──────────────────────────────────────────────────
+        mcomp   = {"object": 0.010, "room": 0.006, "corridor": 0.004, "outdoor": 0.003}[scale]
         mlargest = 0.0
 
         # ── Planar snap ───────────────────────────────────────────────────────
@@ -977,17 +970,13 @@ class ParameterDeriver:
         sky_bright_thresh = float(np.clip(img.mean_brightness * 255 * 1.25, 175, 240))
         sky_depth_min     = float(np.clip(dep.p95 * 0.80, max_d * 0.55, max_d * 0.92))
 
-        # FIX: force bilateral ON for all indoor scans and objects —
-        # depth noise on iPhone LiDAR at close range is always high enough
-        # that bilateral filtering is needed to prevent spike/blur artifacts.
+        # ── Bilateral filter ──────────────────────────────────────────────────
         noise_ratio   = dep.gradient_p95 / (dep.depth_range + 1e-9)
-        use_bilateral = noise_ratio > 0.008 or scale in ("object", "room", "corridor")
+        use_bilateral = noise_ratio > 0.015 or scale == "object"
 
-        # FIX: minimum smooth_iter raised from 1→2 for indoor/object.
-        # 1 pass was not enough to kill residual spike triangles after meshing.
-        smooth_base   = 2 if scale in ("room", "corridor", "object") else 1
-        smooth_iter   = int(np.clip(smooth_base + int(noise_ratio * 20), smooth_base, 6))
-        smooth_lambda = float(np.clip(0.30 + noise_ratio * 2.0, 0.25, 0.70))
+        # ── Mesh smoothing ────────────────────────────────────────────────────
+        smooth_iter   = int(np.clip(1 + noise_ratio * 25, 1, 5))
+        smooth_lambda = float(np.clip(0.25 + noise_ratio * 1.8, 0.15, 0.65))
 
         # ── Hole fill ─────────────────────────────────────────────────────────
         # max_hole_size in pixels; scale with vox inversely

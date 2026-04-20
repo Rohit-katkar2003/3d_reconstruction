@@ -21,7 +21,7 @@ from src.modules.colmap_db        import COLMAPDatabaseBuilder
 from src.modules.depth_fusion     import DepthFusion, _load_exr
 from src.modules.reconstruction   import Reconstruction
 from src.modules.meshing          import Meshing
-from src.modules.validator        import Validator
+# from modules.smart_tuner_old        import Validator
 from src.modules.pose_smoother    import PoseSmoother
 from src.modules.texture_baker    import TextureBaker
 from src.modules.frame_filter     import FrameFilter
@@ -194,12 +194,12 @@ def main():
 
         use_bilateral              = cfg["use_bilateral"],
         use_border_mask            = True,
-        border_frac                =  max(cfg["border_frac"], 0.06),
+        border_frac                = cfg["border_frac"],
         use_sky_suppress           = cfg["use_sky_suppress"],
         sky_bright_thresh          = cfg["sky_bright_thresh"],
         sky_depth_min_m            = cfg["sky_depth_min_m"],
         use_flying_pixel_suppress  = True,
-        flying_pixel_jump_thresh_m = min(cfg["flying_pixel_jump_thresh_m"], 0.02),
+        flying_pixel_jump_thresh_m = cfg["flying_pixel_jump_thresh_m"],
         use_inpaint                = True,
         inpaint_radius_px          = 3,
         use_spike_filter           = True,
